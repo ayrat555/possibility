@@ -8,7 +8,8 @@ use yaml_rust::Yaml;
 use yaml_rust::YamlLoader;
 
 const TAG_PROBABILITIES_PATH: &str = "./src/data/tags.yml";
-const ERROR_MESSAGE: &str = "tags.yml file is invalid";
+const WORDS_PATH: &str = "./src/data/words.yml";
+const ERROR_MESSAGE: &str = "yml file is invalid";
 
 #[derive(Hash, PartialEq, Eq, Debug)]
 pub enum Tag {
@@ -114,6 +115,7 @@ impl FromStr for Tag {
 
 struct TagData {
     pub tag_probabilities: HashMap<Tag, HashMap<Tag, f32>>,
+    pub words: HashMap<String, HashMap<Tag, i32>>,
 }
 
 struct Possibility {
@@ -129,25 +131,30 @@ impl Possibility {
 }
 
 fn read_tag_data() -> TagData {
+    let tag_probabilities = read_tag_probabilities();
+    let words = read_words();
+
+    TagData {
+        tag_probabilities,
+        words,
+    }
+}
+
+fn read_tag_probabilities() -> HashMap<Tag, HashMap<Tag, f32>> {
     let mut file = File::open(TAG_PROBABILITIES_PATH).unwrap();
 
     let mut string_probabilities = String::new();
     file.read_to_string(&mut string_probabilities).unwrap();
 
-    let hash_tag_probabilities = YamlLoader::load_from_str(&string_probabilities).unwrap();
+    let yml = YamlLoader::load_from_str(&string_probabilities).unwrap();
 
-    parse_yaml(hash_tag_probabilities)
-}
-
-fn parse_yaml(yml: Vec<Yaml>) -> TagData {
     let mut tag_probabilities_vec = yml
         .iter()
-        .cloned()
         .map(|yml_entry| match yml_entry {
             Yaml::Hash(tag_probabilities) => tag_probabilities
                 .iter()
                 .map(|(key, val)| {
-                    let string_key = match key {
+                    let tag_key = match key {
                         Yaml::String(string_key) => Tag::from_str(string_key).unwrap(),
                         _ => panic!(ERROR_MESSAGE),
                     };
@@ -156,32 +163,80 @@ fn parse_yaml(yml: Vec<Yaml>) -> TagData {
                         Yaml::Hash(probabilities) => probabilities
                             .iter()
                             .map(|(key, val)| {
-                                let string_key = match key {
+                                let tag_key = match key {
                                     Yaml::String(string_key) => Tag::from_str(string_key).unwrap(),
                                     _ => panic!(ERROR_MESSAGE),
                                 };
 
-                                let string_val = match val {
+                                let real_val = match val {
                                     Yaml::Real(string_val) => f32::from_str(string_val).unwrap(),
                                     _ => panic!(ERROR_MESSAGE),
                                 };
 
-                                (string_key, string_val)
+                                (tag_key, real_val)
                             }).collect::<HashMap<Tag, f32>>(),
                         _ => panic!(ERROR_MESSAGE),
                     };
 
-                    (string_key, values)
+                    (tag_key, values)
                 }).collect::<HashMap<Tag, HashMap<Tag, f32>>>(),
 
-            _ => panic!("tags.yml file is invalid"),
+            _ => panic!(ERROR_MESSAGE),
         }).collect::<Vec<HashMap<Tag, HashMap<Tag, f32>>>>();
 
-    let tag_probabilities = tag_probabilities_vec.pop().unwrap();
+    tag_probabilities_vec.pop().unwrap()
+}
 
-    TagData {
-        tag_probabilities: tag_probabilities,
-    }
+fn read_words() -> HashMap<String, HashMap<Tag, i32>> {
+    let mut file = File::open(WORDS_PATH).unwrap();
+
+    let mut string_probabilities = String::new();
+    file.read_to_string(&mut string_probabilities).unwrap();
+
+    let yml = YamlLoader::load_from_str(&string_probabilities).unwrap();
+
+    let mut words_vec = yml
+        .iter()
+        .map(|yml_entry| match yml_entry {
+            Yaml::Hash(words) => words
+                .iter()
+                .map(|(key, val)| {
+                    let word = match key {
+                        Yaml::String(string_key) => string_key.clone(),
+                        Yaml::Boolean(boolean_value) => if *boolean_value {
+                            String::from("true")
+                        } else {
+                            String::from("false")
+                        },
+                        _ => panic!(ERROR_MESSAGE),
+                    };
+
+                    let values = match val {
+                        Yaml::Hash(tags) => tags
+                            .iter()
+                            .map(|(key, val)| {
+                                let tag_key = match key {
+                                    Yaml::String(string_key) => Tag::from_str(string_key).unwrap(),
+                                    _ => panic!(ERROR_MESSAGE),
+                                };
+
+                                let integer_val = match val {
+                                    Yaml::Integer(i64_val) => *i64_val as i32,
+                                    _ => panic!(ERROR_MESSAGE),
+                                };
+
+                                (tag_key, integer_val)
+                            }).collect::<HashMap<Tag, i32>>(),
+                        _ => panic!(ERROR_MESSAGE),
+                    };
+
+                    (word, values)
+                }).collect::<HashMap<String, HashMap<Tag, i32>>>(),
+
+            _ => panic!(ERROR_MESSAGE),
+        }).collect::<Vec<HashMap<String, HashMap<Tag, i32>>>>();
+
+    words_vec.pop().unwrap()
 }
 
 #[cfg(test)]
@@ -217,5 +272,4 @@ mod tests {
             0.0292094 as f32
         );
     }
-
 }
