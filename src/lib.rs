@@ -8,53 +8,54 @@ use yaml_rust::Yaml;
 use yaml_rust::YamlLoader;
 
 const TAG_PROBABILITIES_PATH: &str = "./src/data/tags.yml";
+const ERROR_MESSAGE: &str = "tags.yml file is invalid";
 
 #[derive(Hash, PartialEq, Eq, Debug)]
-enum Tag {
-    CC,
-    CD,
-    DET,
-    EX,
-    FW,
-    IN,
-    JJ,
-    JJR,
-    JJS,
-    LS,
-    MD,
-    NN,
-    NNP,
-    NNPS,
-    NNS,
-    PDT,
-    POS,
-    PRP,
-    PRPS,
-    RB,
-    RBR,
-    RBS,
-    RP,
-    SYM,
-    TO,
-    UH,
-    VB,
-    VBD,
-    VBG,
-    VBN,
-    VBP,
-    VBZ,
-    WDT,
-    WP,
-    WPS,
-    WRB,
-    PP,
-    PPC,
-    PPD,
-    PPL,
-    PPR,
-    PPS,
-    LRB,
-    RRB,
+pub enum Tag {
+    CC,   // Conjunction, coordinating
+    CD,   // Adjective, cardinal number
+    DET,  // Determiner
+    EX,   // Pronoun, existential there
+    FW,   // Foreign words
+    IN,   // Preposition / Conjunction
+    JJ,   // Adjective
+    JJR,  // Adjective, comparative
+    JJS,  // Adjective, superlative
+    LS,   // Symbol, list item
+    MD,   // Verb, modal
+    NN,   // Noun
+    NNP,  // Noun, proper
+    NNPS, // Noun, proper, plural
+    NNS,  // Noun, plural
+    PDT,  // Determiner, prequalifier
+    POS,  // Possessive
+    PRP,  // Determiner, possessive second
+    PRPS, // Determiner, possessive
+    RB,   // Adverb
+    RBR,  // Adverb, comparative
+    RBS,  // Adverb, superlative
+    RP,   // Adverb, particle
+    SYM,  // Symbol
+    TO,   // Preposition
+    UH,   // Interjection
+    VB,   // Verb, infinitive
+    VBD,  // Verb, past tense
+    VBG,  // Verb, gerund
+    VBN,  // Verb, past/passive participle
+    VBP,  // Verb, base present form
+    VBZ,  // Verb, present 3SG -s form
+    WDT,  // Determiner, question
+    WP,   // Pronoun, question
+    WPS,  // Determiner, possessive & question
+    WRB,  // Adverb, question
+    PP,   // Punctuation, sentence ender
+    PPC,  // Punctuation, comma
+    PPD,  // Punctuation, dollar sign
+    PPL,  // Punctuation, quotation mark left
+    PPR,  // Punctuation, quotation mark right
+    PPS,  // Punctuation, colon, semicolon, elipsis
+    LRB,  // Punctuation, left bracket
+    RRB,  // Punctuation, right bracket
 }
 
 impl FromStr for Tag {
@@ -112,11 +113,11 @@ impl FromStr for Tag {
 }
 
 struct TagData {
-    tag_probabilities: HashMap<Tag, HashMap<Tag, f32>>,
+    pub tag_probabilities: HashMap<Tag, HashMap<Tag, f32>>,
 }
 
 struct Possibility {
-    tag_data: TagData,
+    pub tag_data: TagData,
 }
 
 impl Possibility {
@@ -139,16 +140,16 @@ fn read_tag_data() -> TagData {
 }
 
 fn parse_yaml(yml: Vec<Yaml>) -> TagData {
-    let tag_probabilities_vec = yml
-        .clone()
+    let mut tag_probabilities_vec = yml
         .iter()
+        .cloned()
         .map(|yml_entry| match yml_entry {
             Yaml::Hash(tag_probabilities) => tag_probabilities
                 .iter()
                 .map(|(key, val)| {
                     let string_key = match key {
                         Yaml::String(string_key) => Tag::from_str(string_key).unwrap(),
-                        _ => panic!("tags.yml file is invalid"),
+                        _ => panic!(ERROR_MESSAGE),
                     };
 
                     let values = match val {
@@ -157,17 +158,17 @@ fn parse_yaml(yml: Vec<Yaml>) -> TagData {
                             .map(|(key, val)| {
                                 let string_key = match key {
                                     Yaml::String(string_key) => Tag::from_str(string_key).unwrap(),
-                                    _ => panic!("tags.yml file is invalid"),
+                                    _ => panic!(ERROR_MESSAGE),
                                 };
 
                                 let string_val = match val {
                                     Yaml::Real(string_val) => f32::from_str(string_val).unwrap(),
-                                    _ => panic!("tags.yml file is invalid"),
+                                    _ => panic!(ERROR_MESSAGE),
                                 };
 
                                 (string_key, string_val)
                             }).collect::<HashMap<Tag, f32>>(),
-                        _ => panic!("tags.yml file is invalid"),
+                        _ => panic!(ERROR_MESSAGE),
                     };
 
                     (string_key, values)
@@ -176,18 +177,45 @@ fn parse_yaml(yml: Vec<Yaml>) -> TagData {
             _ => panic!("tags.yml file is invalid"),
         }).collect::<Vec<HashMap<Tag, HashMap<Tag, f32>>>>();
 
+    let tag_probabilities = tag_probabilities_vec.pop().unwrap();
+
     TagData {
-        tag_probabilities: tag_probabilities_vec.first().unwrap().clone(),
+        tag_probabilities: tag_probabilities,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::Possibility;
+    use super::Tag::*;
 
     #[test]
-    fn initializes_pos_tagger() {
+    fn initializes_pos_tagger_with_data_from_yml_file() {
         let possibility = Possibility::new();
+
+        assert_eq!(possibility.tag_data.tag_probabilities.len(), 44);
+
+        assert_eq!(
+            possibility
+                .tag_data
+                .tag_probabilities
+                .get(&CC)
+                .unwrap()
+                .len(),
+            40
+        );
+
+        assert_eq!(
+            possibility
+                .tag_data
+                .tag_probabilities
+                .get(&CD)
+                .unwrap()
+                .get(&DET)
+                .unwrap()
+                .clone(),
+            0.0292094 as f32
+        );
     }
 
 }
